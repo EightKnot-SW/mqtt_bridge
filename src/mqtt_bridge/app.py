@@ -72,6 +72,7 @@ def _on_connect(client, userdata, flags, response_code):
 
 def _on_disconnect(client, userdata, response_code):
     rospy.loginfo('MQTT disconnected')
+    rospy.signal_shutdown('MQTT disconnected')
 
 
 __all__ = ['mqtt_bridge_node']
