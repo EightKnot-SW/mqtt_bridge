@@ -1,10 +1,14 @@
+from typing import List
+
 import inject
 import paho.mqtt.client as mqtt
 import rospy
 
-from .bridge import create_bridge
+from .bridge import Bridge, create_bridge
 from .mqtt_client import create_private_path_extractor
 from .util import lookup_object
+
+_bridges: List[Bridge] = []
 
 
 def create_config(mqtt_client, serializer, deserializer, mqtt_private_path):
@@ -47,15 +51,14 @@ def mqtt_bridge_node():
         mqtt_client, serializer, deserializer, mqtt_private_path)
     inject.configure(config)
 
+    # configure bridges
+    global _bridges
+    _bridges = [create_bridge(**bridge_args) for bridge_args in bridge_params]
+
     # configure and connect to MQTT broker
     mqtt_client.on_connect = _on_connect
     mqtt_client.on_disconnect = _on_disconnect
-    mqtt_client.connect(**conn_params)
-
-    # configure bridges
-    bridges = []
-    for bridge_args in bridge_params:
-        bridges.append(create_bridge(**bridge_args))
+    mqtt_client.connect_async(**conn_params)
 
     # start MQTT loop
     mqtt_client.loop_start()
@@ -68,11 +71,14 @@ def mqtt_bridge_node():
 
 def _on_connect(client, userdata, flags, response_code):
     rospy.loginfo('MQTT connected')
+    for bridge in _bridges:
+        bridge.on_mqtt_connect()
 
 
 def _on_disconnect(client, userdata, response_code):
     rospy.loginfo('MQTT disconnected')
-    rospy.signal_shutdown('MQTT disconnected')
+    for bridge in _bridges:
+        bridge.on_mqtt_disconnect()
 
 
 __all__ = ['mqtt_bridge_node']
